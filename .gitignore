@@ -1,0 +1,5 @@
+.vscode
+assets
+
+*~
+*__pycache__
