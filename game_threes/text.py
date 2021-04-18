@@ -1,6 +1,7 @@
 import logging
 
-
+def logerror(strIn : str):
+    logging.error(strIn)
 def logwarn(strIn : str):
     logging.warning(strIn)
 def loginfo(strIn : str):
