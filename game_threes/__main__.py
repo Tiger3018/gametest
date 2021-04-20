@@ -1,14 +1,18 @@
-#!/bin/env python3
+#!/bin/env python3.8
 
 if not __package__ :
+    from os import path as _pathOS
     from sys import path as _pathSys
-    _pathSys.insert(0, '')
+    _pathSys.insert(0, _pathOS.dirname(__file__) + '/..')
+    # print(_pathSys)
     __package__ = "game_threes"
+
 
 import game_threes
 import pygame_menu, threading, signal, ctypes
 import pygame as pg
-from . import uidraw, text, gen
+pg.init()
+from game_threes import uidraw, text, status
 
 def __main__():
     '''
@@ -21,25 +25,19 @@ def __main__():
     except Exception:
         text.logwarn("ctypes on win32 failed.")
     text.loginfo("__main__()")
-    # keyHandle = threading.Thread(name = "keyHandle", target = gen.check)
     # Module, Event Init. Display & uidraw.card Init.
     th1 = threading.Thread(name = "eventHandle", target = eventHandler)
     th1.start()
-    # Give mainThread some thing to do.
+    # Give mainThread something to do.
     uidraw.card.classInit()
     while True:
         sleep(10)
-    # Event handler
-                # if keyHandle
-            # if event.type == pg.MOUSEBUTTONDOWN :
-            #     pass
 
 def eventHandler():
-    pg.init()
     pg.event.set_blocked(None)
     pg.event.set_allowed([pg.MOUSEBUTTONUP, pg.MOUSEBUTTONDOWN, pg.KEYUP, pg.QUIT])
-    # threading.Thread(name = "pygameEvent", target = pg.fastevent.init).start()
     pg.fastevent.init()
+    uidraw.card.classInit()
 
     # pg.display.quit()
     # pg.display.init()
@@ -49,6 +47,8 @@ def eventHandler():
     pg.draw.rect(surface, (0, 255, 0), (300, 100, 10, 10))
     pg.display.flip()
 
+    test = uidraw.card(3, 4)
+    test.draw(surface)
     while event := pg.fastevent.wait() :
         # print(event)
         if event.type == pg.QUIT :
@@ -56,7 +56,7 @@ def eventHandler():
             game_threes.threadExit(0)
         elif event.type == pg.KEYUP :
             directionKey = keyInterupt[event.key]
-        pg.draw.rect(surface, (0, 255, 0), (200, 100, 10, 10))
+        # pg.draw.rect(surface, (0, 255, 0), (200, 100, 10, 10))
         pg.display.flip()
 
 def exceptHookOverride(args, /):
