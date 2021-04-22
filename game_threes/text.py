@@ -1,14 +1,16 @@
 import logging
 
-def logerror(strIn : str):
+def logerror(*strIn ):
     logging.error(strIn)
-def logwarn(strIn : str):
+def logwarn(*strIn ):
     logging.warning(strIn)
-def loginfo(strIn : str):
+def loginfo(*strIn ):
     logging.info(strIn)
+def logdebug(*strIn ):
+    logging.debug(strIn)
 
 def __init__():
-    logging.basicConfig(format = "%(threadName)s - [%(levelname)s] %(message)s")
+    logging.basicConfig(format = "[%(levelname)s] %(threadName)s - %(message)s")
     logging.getLogger().setLevel(logging.INFO)
 
 __init__()

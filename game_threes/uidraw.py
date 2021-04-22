@@ -6,6 +6,7 @@ By import this file -> clickGroupInstance, cardGroupInstance.
 By starting a thread calling function displayHandler, it will interact with sprite system.
 '''
 import pygame as pg
+import game_threes
 from game_threes import PROGRAMSIZE, PROGRAMMEDIA, SIZEALL
 from game_threes import text, th
 from os.path import isfile
@@ -89,7 +90,7 @@ class card(pg.sprite.Sprite):
         self._pos = pos
         self.image = card.imgStandard[num]
         self.rect = cardGroup.standardPos[pos]
-        pg.sprite.Sprite.__init__(self, [cardGroupInstance, groups])
+        pg.sprite.Sprite.__init__(self, [groups])
 
     def __del__(self):
         self.kill()
@@ -107,15 +108,16 @@ class card(pg.sprite.Sprite):
         if not waitS:
             return False
         num = waitS.num
-        if not num or self._num != num:
-            return False
-        elif self._num + num == 3:
+        if self._num + num == 3:
             return 3
+        elif self._num == 1 or self._num == 2 or self._num != num:
+            return False
         else:
             return self._num * 2
 
     def move(self, posTo):
-        self.groups()[0].move_sprite_internal(self, posTo)
+        if myGroup := self.groups():
+            myGroup[0].move_sprite_internal(self, posTo)
         '''
         for group in self.groups():
             try:
@@ -134,7 +136,7 @@ class card(pg.sprite.Sprite):
     
     @pos.setter
     def pos(self, value):
-        if pos >= SIZEALL:
+        if self._pos >= SIZEALL:
             raise ValueError("")
         self.rect = cardGroup.standardPos[value]
         self._pos = value
@@ -164,10 +166,11 @@ class cardGroup(pg.sprite.Group):
 
     def add_internal(self, sprite, layer = None):
         pg.sprite.Group.add_internal(self, sprite, layer)
-        self._changedSprites += [sprite]
+        self._changedSprites.append(sprite)
         self._setPosObj(sprite, sprite.pos)
 
     def remove_internal(self, sprite):
+        text.logdebug(sprite.pos, sprite.num)
         pg.sprite.Group.remove_internal(self, sprite)
         self._delPosObj(sprite.pos)
      
@@ -190,18 +193,20 @@ class cardGroup(pg.sprite.Group):
         self._delPosObj(sprite.pos)
         sprite.pos = posTo
         self._setPosObj(sprite, sprite.pos)
+        if sprite not in self._changedSprites:
+            self._changedSprites.append(sprite)
 
     def stepOver(self, sprite, *rect):
         pass
 
     def draw(self, surface : pg.surface):
-        surface_blit = surface.blit
-        dirty_append = dirty.append
         dirty = self.lostsprites
         self.lostsprites = []
+        surface_blit = surface.blit
+        dirty_append = dirty.append
         for sprite in self._changedSprites:
             old_rect = self.spritedict[sprite]
-            new_rect = surface_blit(sprite.image, sprite.rect)
+            new_rect = sprite.draw(surface)
             if old_rect:
                 if new_rect.colliderect(old_rect):
                     dirty_append(new_rect.union(old_rect))
@@ -215,7 +220,7 @@ class cardGroup(pg.sprite.Group):
         return dirty
 
     def find(self, posAt):
-        if posAT < SIZEALL:
+        if posAt < SIZEALL:
             return self._posObject[posAt]
         else:
             return None
@@ -223,47 +228,58 @@ class cardGroup(pg.sprite.Group):
 clickGroupInstance = clickGroup()
 cardGroupInstance = cardGroup()
 renderQueue = []
+surfaceCreated = None
 
-def displayHandler(surface = None, frame = 60):
-    global renderQueue
+def displayHandler(frame = 60, surface = None):
     from game_threes.status import check as status_check
     from game_threes.status import nextHold as status_nextHold
+    global renderQueue
+    # text.loginfo(surface, surfaceCreated) where the error meets.
+    if not surface:
+        surface = surfaceCreated
     
-    surface = pg.display.set_mode(PROGRAMSIZE, vsync = 1)
     imTest = pg.transform.scale(fileProcess.imageObj("bg.png"), PROGRAMSIZE)
     surface.blit(imTest, (0, 0, 420, 600))
-    pg.draw.rect(surface, (0, 255, 0), (300, 100, 10, 10))
     card.classInit()
-    # test = card(3, 4)
-    # test = card(6, 5)
-    # test = card(3, 6)
-    test = card(1, 7)
+    test = card(1, 1, cardGroupInstance)
     status_nextHold()
-    test.draw(surface)
+    cardGroupInstance.draw(surface)
 
     while True:
         if th.lockDisplay.locked():
-            pg.fastevent.post(pg.fastevent.wait()) # a better thread.
             continue
         if not renderQueue:
             pg.display.flip()
         else:
-            renderTemp = renderQueue
-            renderQueue = []
+            text.logdebug("plot", renderQueue)
+            renderTemp = renderQueue.copy()
+            renderQueue.clear()
             rectUpdate = []
             surface.blit(imTest, (0, 0, 420, 600))
-            for reIt in renderTemp: # [Object has draw()], (group, sprite), (pos, sprite), (None, sprite)
+            for reIt in renderTemp: # Object has draw(), (group, sprite), (pos, sprite), (None, sprite)
                 lenreIt = len(reIt)
                 if lenreIt == 1:
                     rectUpdate.append(reIt.draw(surface))
                 elif lenreIt == 2:
                     if isinstance(reIt[0], pg.sprite.Group):
                         reIt[0].add(reIt[1])
-                    elif reIt[0]:
-                        reIt[0].move(pos)
+                    elif isinstance(reIt[0], int):
+                        reIt[1].move(reIt[0])
                     else:
-                        del reIt[0]
+                        sprite = reIt[1]
+                        sprite.kill()
+                        del sprite # can't delete tuple object
+            rectUpdate = cardGroupInstance.draw(surface)
             pg.display.update(rectUpdate)
-            status_check()
+            # pg.display.flip() # will overwrite any still card
+            if not status_check():
+                text.logerror("no more step.")
+            text.logdebug(cardGroupInstance)
         th.lockDisplay.acquire()
-# if threading.current_thread().getName() == "displayHandle":
+
+def displayCreator():
+    global surfaceCreated
+    surfaceCreated = pg.display.set_mode(game_threes.PROGRAMSIZE, vsync = 1)
+    text.loginfo("done")
+    while True:
+        pg.fastevent.post(pg.fastevent.wait()) # wait is valid, signal is invalid, not blocking.

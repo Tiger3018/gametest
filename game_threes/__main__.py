@@ -28,19 +28,23 @@ def __main__():
     text.loginfo("__main__()")
     # Module, Event Init. Display & uidraw.card Init.
     th1 = th.Thread(name = "eventHandle", target = eventHandler)
-    th2 = th.Thread(name = "displayHandle", target = uidraw.displayHandler, args = (None, ))
+    th2 = th.Thread(name = "displayCreate", target = uidraw.displayCreator)
+    th3 = th.Thread(name = "displayHandle", target = uidraw.displayHandler, args = (60, ))
     th1.start()
     th2.start()
+    sleep(.3)
+    while not uidraw.surfaceCreated:
+        pass
+    th3.start()
     # Give mainThread something to do.
-    uidraw.card.classInit()
     while True:
-        sleep(10)
+        th1.is_alive()
+        th2.is_alive()
 
 def eventHandler():
     pg.event.set_blocked(None)
     pg.event.set_allowed([pg.MOUSEBUTTONUP, pg.MOUSEBUTTONDOWN, pg.KEYUP, pg.QUIT])
     pg.fastevent.init()
-
     '''
     surface = pg.display.set_mode(game_threes.PROGRAMSIZE, vsync = 1)
     imTest = pg.transform.scale(uidraw.fileProcess.imageObj("bg.png"), game_threes.PROGRAMSIZE)
@@ -61,19 +65,21 @@ def eventHandler():
     keyInterpret = {k : v for v, kIter in keyPre.items() for k in kIter}
     while True:
         event = pg.fastevent.wait()
-        print(event)
         try:
             if event.type == pg.QUIT :
                 text.loginfo("Successfully exit with pg.fastevent, exit 0")
                 game_threes.threadExit(0)
             elif event.type == pg.KEYUP :
                 directionKey = keyInterpret.get(event.key)
-                if directionKey <= 3:
+                if directionKey == None:
+                    pass
+                elif directionKey <= 3:
                     if th.lockTriggerMove.locked(): # status - Locked
                         text.logwarn(
                             "Try to move <{}>, "\
                             "but trigger still running.".format((directionKey)))
                     elif th.lockDisplay.locked(): # status - Locked
+                        th.lockTriggerMove.acquire()
                         th.Thread(
                             name = "TriggerMove",
                             target = trMove,
@@ -91,11 +97,8 @@ def eventHandler():
         # pg.draw.rect(surface, (0, 255, 0), (200, 100, 10, 10))
 
 def trMove(moveDir):
-    text.loginfo("trMove({})".format(moveDir))
-    th.lockTriggerMove.acquire()
+    text.logdebug("trMove({})".format(moveDir))
     if status.confirm(moveDir):
-        if not status.check():
-            text.logerror("no more step.")
         th.lockDisplay.release()
         # music implement
     else:

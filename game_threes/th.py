@@ -1,4 +1,4 @@
-import threading
+import game_threes, threading
 from game_threes import text
 from threading import Thread, Lock
 
