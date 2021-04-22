@@ -28,7 +28,7 @@ def __main__():
     text.loginfo("__main__()")
     # Module, Event Init. Display & uidraw.card Init.
     th1 = th.Thread(name = "eventHandle", target = eventHandler)
-    th2 = th.Thread(name = "displayHandle", target = uidraw.displayHandler, args = (60))
+    th2 = th.Thread(name = "displayHandle", target = uidraw.displayHandler, args = (None, ))
     th1.start()
     th2.start()
     # Give mainThread something to do.
@@ -40,13 +40,28 @@ def eventHandler():
     pg.event.set_blocked(None)
     pg.event.set_allowed([pg.MOUSEBUTTONUP, pg.MOUSEBUTTONDOWN, pg.KEYUP, pg.QUIT])
     pg.fastevent.init()
+
+    '''
+    surface = pg.display.set_mode(game_threes.PROGRAMSIZE, vsync = 1)
+    imTest = pg.transform.scale(uidraw.fileProcess.imageObj("bg.png"), game_threes.PROGRAMSIZE)
+    surface.blit(imTest, (0, 0, 420, 600))
+    pg.draw.rect(surface, (0, 255, 0), (300, 100, 10, 10))
+    uidraw.card.classInit()
+    test = uidraw.card(3, 4)
+    test.draw(surface)
+    pg.display.flip()
+    status.nextHold()
+    th2 = th.Thread(name = "displayHandle", target = uidraw.displayHandler, args = (surface))
+    th2.start()
+    '''
     keyPre = {
         0 : (pg.K_w, pg.K_UP), 3 : (pg.K_a, pg.K_LEFT), 2 : (pg.K_s, pg.K_DOWN),
-        1 : (pg.K_d, pg.K_RIGHT), 4 : (pg.K_r)
+        1 : (pg.K_d, pg.K_RIGHT), 4 : (pg.K_r, )
         }
     keyInterpret = {k : v for v, kIter in keyPre.items() for k in kIter}
-    while event := pg.fastevent.wait() :
-        # print(event)
+    while True:
+        event = pg.fastevent.wait()
+        print(event)
         try:
             if event.type == pg.QUIT :
                 text.loginfo("Successfully exit with pg.fastevent, exit 0")
@@ -54,15 +69,15 @@ def eventHandler():
             elif event.type == pg.KEYUP :
                 directionKey = keyInterpret.get(event.key)
                 if directionKey <= 3:
-                    if not thLockTriggerMove.acquire(blocking = False):
+                    if th.lockTriggerMove.locked(): # status - Locked
                         text.logwarn(
                             "Try to move <{}>, "\
                             "but trigger still running.".format((directionKey)))
-                    elif not uidraw.thLockDisplay.acquire(blocking = False): # status - Locked
-                        threading.Thread(
+                    elif th.lockDisplay.locked(): # status - Locked
+                        th.Thread(
                             name = "TriggerMove",
                             target = trMove,
-                            args = (directionKey)
+                            args = (directionKey, )
                             ).start()
                         # do sth here
                     else:
@@ -76,24 +91,17 @@ def eventHandler():
         # pg.draw.rect(surface, (0, 255, 0), (200, 100, 10, 10))
 
 def trMove(moveDir):
-    thLockTriggerMove.acquire()
-    if status.confirm(directionKey):
-        status.check()
-        thLockDisplay.release()
+    text.loginfo("trMove({})".format(moveDir))
+    th.lockTriggerMove.acquire()
+    if status.confirm(moveDir):
+        if not status.check():
+            text.logerror("no more step.")
+        th.lockDisplay.release()
         # music implement
     else:
         text.logwarn("invalid direction.")
-    thLockTriggerMove.release()
+    th.lockTriggerMove.release()
 
-def exceptHookOverride(args, /):
-    exceptHookOrigin(args)
-    text.logerror("Raise Exception, exit 1")
-    game_threes.threadExit(1)
-exceptHookOrigin = threading.excepthook
-threading.excepthook = exceptHookOverride
-
-thLockTriggerMove = threading.Lock()
-thLockDisplay = threading.Lock()
 
 try:
     __main__()

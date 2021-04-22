@@ -7,9 +7,7 @@ By starting a thread calling function displayHandler, it will interact with spri
 '''
 import pygame as pg
 from game_threes import PROGRAMSIZE, PROGRAMMEDIA, SIZEALL
-from game_threes import text
-from game_threes.__main__ import thLockDisplay
-from game_threes.status import check as status_check
+from game_threes import text, th
 from os.path import isfile
 from abc import ABC
 
@@ -105,7 +103,10 @@ class card(pg.sprite.Sprite):
                 )
         return rect
 
-    def merge(self, num : [int, None]):
+    def merge(self, waitS : [pg.sprite.Sprite, None]):
+        if not waitS:
+            return False
+        num = waitS.num
         if not num or self._num != num:
             return False
         elif self._num + num == 3:
@@ -213,30 +214,44 @@ class cardGroup(pg.sprite.Group):
         self._changedSprites = []
         return dirty
 
-        def find(self, posAt):
+    def find(self, posAt):
+        if posAT < SIZEALL:
             return self._posObject[posAt]
+        else:
+            return None
 
 clickGroupInstance = clickGroup()
 cardGroupInstance = cardGroup()
 renderQueue = []
 
-def displayHandler(frame = 60):
+def displayHandler(surface = None, frame = 60):
     global renderQueue
-    surface = pg.display.set_mode(game_threes.PROGRAMSIZE, vsync = 1)
+    from game_threes.status import check as status_check
+    from game_threes.status import nextHold as status_nextHold
+    
+    surface = pg.display.set_mode(PROGRAMSIZE, vsync = 1)
     imTest = pg.transform.scale(fileProcess.imageObj("bg.png"), PROGRAMSIZE)
     surface.blit(imTest, (0, 0, 420, 600))
     pg.draw.rect(surface, (0, 255, 0), (300, 100, 10, 10))
-    pg.display.flip()
-    uidraw.card.classInit()
-    test = uidraw.card(3, 4)
+    card.classInit()
+    # test = card(3, 4)
+    # test = card(6, 5)
+    # test = card(3, 6)
+    test = card(1, 7)
+    status_nextHold()
     test.draw(surface)
-    while thLockDisplay.acquire():
+
+    while True:
+        if th.lockDisplay.locked():
+            pg.fastevent.post(pg.fastevent.wait()) # a better thread.
+            continue
         if not renderQueue:
             pg.display.flip()
         else:
             renderTemp = renderQueue
             renderQueue = []
             rectUpdate = []
+            surface.blit(imTest, (0, 0, 420, 600))
             for reIt in renderTemp: # [Object has draw()], (group, sprite), (pos, sprite), (None, sprite)
                 lenreIt = len(reIt)
                 if lenreIt == 1:
@@ -250,5 +265,5 @@ def displayHandler(frame = 60):
                         del reIt[0]
             pg.display.update(rectUpdate)
             status_check()
-        thLockDisplay.acquire()
+        th.lockDisplay.acquire()
 # if threading.current_thread().getName() == "displayHandle":

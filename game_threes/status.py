@@ -31,28 +31,45 @@ class _gameStatus:
     def _move(self, posAt, moveDir, mN):
         # mN = _gameStatus.moveFind[moveDir]
         # mNO = gameStatus.moveFind[dirReverse[moveDir]]
-        if not posAt:
+        # print("_move", posAt, moveDir, self)
+        if posAt == None:
             return []
         recurValue = self._move(mN[posAt], moveDir, mN)
         if cardObj := cgObj.find(posAt):
+            # if not recurValue:
+                # recurValue = []
             return [(_gameStatus.dirReverse[moveDir], cardObj)] + recurValue
         else:
             return recurValue 
 
-    def _merge(self, posAt, moveDir, mN):
+    def _merge(self, posAt, posWill, moveDir, mN):
+        '''
+        0 == False, None == False. SO USE xx == None
+        LINE - along the given direction
+        1. If find(posAt) == None THEN any other card in this line may just move.
+        2. If posAt is out/the final card THEN this line can't move.
+        3. If find(mN[posAt]) == None THEN from this card
+        '''
         # mN = _gameStatus.moveFind[moveDir]
-        if not posAt:
-            return False
+        # print("_m", posAt, moveDir, self)
+        if posAt == None or mN[posAt] == None:
+            return False # Following cards can't be merged.
         elif not (cardObj := cgObj.find(posAt)):
-            return [[], [], self._move(mN[posAt], moveDir, mN)]
-        elif newNumber := cardObj.merge(moveCardObj := cgObj.find(mN[posAt])):
+            if recurValue := self._move(mN[posAt], moveDir, mN):
+                return [[], [], recurValue]
+            else:
+                return True # There is no card in this direction
+        else:
+            newNumber = cardObj.merge(moveCardObj := cgObj.find(mN[posAt]))
+            if newNumber:
+                recurValue = self._merge(mN[mN[posAt]], mN[posWill], moveDir, mN)
             return [
                 (posAt, newNumber),
                 [(mN[posAt], moveCardObj), (posAt, cardObj)],
-                self._move(mN[posAt], moveDir, mN)
+                self._merge(mN[posAt], moveDir, mN)
             ]
         else:
-            return self._merge(mN[posAt], moveDir, mN)
+            return self._merge(mN[posAt], mN[posWill], moveDir, mN)
 
     def check(self):
         self._reset()
@@ -64,13 +81,14 @@ class _gameStatus:
             mN = _gameStatus.moveFind[dirSelectR]
             for dirInitSelect in _gameStatus.dirInit[dirSelectR]:
                 if recurValue := self._merge(dirInitSelect, dirSelectR, mN): # not False
-                    for i in range(3):
-                        predictTemp[i] += [recurValue[i]]
-                    predictTemp[3] += 1
-            if predictTemp[0]:
+                    if not recurValue == True:
+                        for i in range(3):
+                            predictTemp[i] += recurValue[i]
+                    predictTemp[3] += 1 # this direction of line can be moved
+            genNextValue = min(genNextValue, predictTemp[3])
+            if predictTemp[2]: # must move one exist card at least.
                 self.predict[dirSelect] = predictTemp[:2]
-                returnValue += dirSelect
-                genNextValue = min(genNextValue, predictTemp[3])
+                returnValue += [dirSelect]
         self.genNext(genNextValue)
         return returnValue
 
@@ -89,6 +107,7 @@ def nextHold():
     global currentStatus
     if not currentStatus:
         currentStatus = _gameStatus()
+    return currentStatus.check()
     # currentStatus.check()
 
 def check():
@@ -102,9 +121,13 @@ def check():
 def confirm(moveDir):
     if not (predict := currentStatus.predict[moveDir]):
         return False
+    moveList = []
+    for it in predict[2]:
+        if posTo := _gameStatus.moveFind[it[0]][it[1].pos]:
+            moveList.append((posTo, it[1]))
     renderQueue.append(predict[2])
     renderQueue.append((None, it[1]) for it in predict[1])
-    randomList = random.sample(currentStatus.dirInit[moveDir], 4)
+    randomList = random.sample(_gameStatus.dirInit[moveDir], 4)
     cardInstance = [card(it[1], it[0]) for it in predict[0]] + \
         [card(num, pos) for num in currentStatus.nextCard for pos in randomList]
     renderQueue.append([(cardGroupInstance, it) for it in cardInstance])
