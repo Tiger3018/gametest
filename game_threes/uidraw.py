@@ -6,10 +6,12 @@ By import this file -> clickGroupInstance, cardGroupInstance.
 By starting a thread calling function displayHandler, it will interact with sprite system.
 '''
 import pygame as pg
-from game_threes import PROGRAMMEDIA, SIZEALL, text
+from game_threes import PROGRAMSIZE, PROGRAMMEDIA, SIZEALL
+from game_threes import text
+from game_threes.__main__ import thLockDisplay
+from game_threes.status import check as status_check
 from os.path import isfile
 from abc import ABC
-import threading
 
 class fileProcess(ABC):
     def check(fileName):
@@ -111,8 +113,15 @@ class card(pg.sprite.Sprite):
         else:
             return self._num * 2
 
-    def count(self):
-        return
+    def move(self, posTo):
+        self.groups()[0].move_sprite_internal(self, posTo)
+        '''
+        for group in self.groups():
+            try:
+                group.move_sprite_internal(self, posTo)
+            except AttributeError:
+                text.logwarn("self.move() meets invalid group {}.".format(group))
+        '''
     
     @property
     def num(self):
@@ -174,29 +183,72 @@ class cardGroup(pg.sprite.Group):
         else:
             self._posObject[posAt] = None
 
-    def move_sprite(self, sprite, posTo):
+    def move_sprite_internal(self, sprite, posTo):
+        # if sprite not in self:
+            # raise RuntimeError("move_sprite() failed.")
         self._delPosObj(sprite.pos)
         sprite.pos = posTo
         self._setPosObj(sprite, sprite.pos)
 
-    def stepOver(self):
+    def stepOver(self, sprite, *rect):
         pass
 
     def draw(self, surface : pg.surface):
         surface_blit = surface.blit
+        dirty_append = dirty.append
         dirty = self.lostsprites
         self.lostsprites = []
-        dirty_append = dirty.append
         for sprite in self._changedSprites:
-            rect_i = self.spritedict[sprite] = sprite.draw(surface)
-            dirty_append(rect_i)
+            old_rect = self.spritedict[sprite]
+            new_rect = surface_blit(sprite.image, sprite.rect)
+            if old_rect:
+                if new_rect.colliderect(old_rect):
+                    dirty_append(new_rect.union(old_rect))
+                else:
+                    dirty_append(new_rect)
+                    dirty_append(old_rect)
+            else:
+                dirty_append(new_rect)
+            self.spritedict[sprite] = new_rect
         self._changedSprites = []
         return dirty
 
-
-def displayHandler(surface, frame):
-    pass
+        def find(self, posAt):
+            return self._posObject[posAt]
 
 clickGroupInstance = clickGroup()
 cardGroupInstance = cardGroup()
+renderQueue = []
+
+def displayHandler(frame = 60):
+    global renderQueue
+    surface = pg.display.set_mode(game_threes.PROGRAMSIZE, vsync = 1)
+    imTest = pg.transform.scale(fileProcess.imageObj("bg.png"), PROGRAMSIZE)
+    surface.blit(imTest, (0, 0, 420, 600))
+    pg.draw.rect(surface, (0, 255, 0), (300, 100, 10, 10))
+    pg.display.flip()
+    uidraw.card.classInit()
+    test = uidraw.card(3, 4)
+    test.draw(surface)
+    while thLockDisplay.acquire():
+        if not renderQueue:
+            pg.display.flip()
+        else:
+            renderTemp = renderQueue
+            renderQueue = []
+            rectUpdate = []
+            for reIt in renderTemp: # [Object has draw()], (group, sprite), (pos, sprite), (None, sprite)
+                lenreIt = len(reIt)
+                if lenreIt == 1:
+                    rectUpdate.append(reIt.draw(surface))
+                elif lenreIt == 2:
+                    if isinstance(reIt[0], pg.sprite.Group):
+                        reIt[0].add(reIt[1])
+                    elif reIt[0]:
+                        reIt[0].move(pos)
+                    else:
+                        del reIt[0]
+            pg.display.update(rectUpdate)
+            status_check()
+        thLockDisplay.acquire()
 # if threading.current_thread().getName() == "displayHandle":
