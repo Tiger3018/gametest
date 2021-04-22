@@ -1,73 +1,111 @@
-#!/bin/env python3
+#!/bin/env python3.8
 
 if not __package__ :
+    from os import path as _pathOS
     from sys import path as _pathSys
-    _pathSys.insert(0, '')
+    _pathSys.insert(0, _pathOS.dirname(__file__) + '/..')
+    # print(_pathSys)
     __package__ = "game_threes"
 
+
 import game_threes
-import pygame_menu, threading, signal, ctypes
+import pygame_menu, signal, ctypes
 import pygame as pg
-from . import uidraw, text, gen
+pg.init()
+from game_threes import text, status, uidraw, th
+from traceback import print_exc
+from time import sleep
 
 def __main__():
     '''
     Environment initialization : winDPI, pygame, pygame_menu, game_threes.uidraw.card
     '''
-    keyInterrupt = {}
     try:
         if game_threes.PLATFORMNAME == 'nt' :
             ctypes.windll.user32.SetProcessDPIAware()
     except Exception:
         text.logwarn("ctypes on win32 failed.")
     text.loginfo("__main__()")
-    # keyHandle = threading.Thread(name = "keyHandle", target = gen.check)
     # Module, Event Init. Display & uidraw.card Init.
-    th1 = threading.Thread(name = "eventHandle", target = eventHandler)
+    th1 = th.Thread(name = "eventHandle", target = eventHandler)
+    th2 = th.Thread(name = "displayCreate", target = uidraw.displayCreator)
+    th3 = th.Thread(name = "displayHandle", target = uidraw.displayHandler, args = (60, ))
     th1.start()
-    # Give mainThread some thing to do.
-    uidraw.card.classInit()
+    th2.start()
+    sleep(.3)
+    while not uidraw.surfaceCreated:
+        pass
+    th3.start()
+    # Give mainThread something to do.
     while True:
-        sleep(10)
-    # Event handler
-                # if keyHandle
-            # if event.type == pg.MOUSEBUTTONDOWN :
-            #     pass
+        th1.is_alive()
+        th2.is_alive()
 
 def eventHandler():
-    pg.init()
     pg.event.set_blocked(None)
     pg.event.set_allowed([pg.MOUSEBUTTONUP, pg.MOUSEBUTTONDOWN, pg.KEYUP, pg.QUIT])
-    # threading.Thread(name = "pygameEvent", target = pg.fastevent.init).start()
     pg.fastevent.init()
-
-    # pg.display.quit()
-    # pg.display.init()
+    '''
     surface = pg.display.set_mode(game_threes.PROGRAMSIZE, vsync = 1)
-    imTest = pg.transform.scale(pg.image.load("./media/bg.png"), game_threes.PROGRAMSIZE)
+    imTest = pg.transform.scale(uidraw.fileProcess.imageObj("bg.png"), game_threes.PROGRAMSIZE)
     surface.blit(imTest, (0, 0, 420, 600))
     pg.draw.rect(surface, (0, 255, 0), (300, 100, 10, 10))
+    uidraw.card.classInit()
+    test = uidraw.card(3, 4)
+    test.draw(surface)
     pg.display.flip()
+    status.nextHold()
+    th2 = th.Thread(name = "displayHandle", target = uidraw.displayHandler, args = (surface))
+    th2.start()
+    '''
+    keyPre = {
+        0 : (pg.K_w, pg.K_UP), 3 : (pg.K_a, pg.K_LEFT), 2 : (pg.K_s, pg.K_DOWN),
+        1 : (pg.K_d, pg.K_RIGHT), 4 : (pg.K_r, )
+        }
+    keyInterpret = {k : v for v, kIter in keyPre.items() for k in kIter}
+    while True:
+        event = pg.fastevent.wait()
+        try:
+            if event.type == pg.QUIT :
+                text.loginfo("Successfully exit with pg.fastevent, exit 0")
+                game_threes.threadExit(0)
+            elif event.type == pg.KEYUP :
+                directionKey = keyInterpret.get(event.key)
+                if directionKey == None:
+                    pass
+                elif directionKey <= 3:
+                    if th.lockTriggerMove.locked(): # status - Locked
+                        text.logwarn(
+                            "Try to move <{}>, "\
+                            "but trigger still running.".format((directionKey)))
+                    elif th.lockDisplay.locked(): # status - Locked
+                        th.lockTriggerMove.acquire()
+                        th.Thread(
+                            name = "TriggerMove",
+                            target = trMove,
+                            args = (directionKey, )
+                            ).start()
+                        # do sth here
+                    else:
+                        text.logwarn(
+                            "Try to move <{}>, "\
+                            "but uidraw still running.".format((directionKey)))
+                elif directionKey == 4:
+                    raise NotImplementedError('restart game.')
+        except Exception:
+            print_exc()
+        # pg.draw.rect(surface, (0, 255, 0), (200, 100, 10, 10))
 
-    while event := pg.fastevent.wait() :
-        # print(event)
-        if event.type == pg.QUIT :
-            text.loginfo("Successfully exit with pg.fastevent, exit 0")
-            game_threes.threadExit(0)
-        elif event.type == pg.KEYUP :
-            directionKey = keyInterupt[event.key]
-        pg.draw.rect(surface, (0, 255, 0), (200, 100, 10, 10))
-        pg.display.flip()
+def trMove(moveDir):
+    text.logdebug("trMove({})".format(moveDir))
+    if status.confirm(moveDir):
+        th.lockDisplay.release()
+        # music implement
+    else:
+        text.logwarn("invalid direction.")
+    th.lockTriggerMove.release()
 
-def exceptHookOverride(args, /):
-    exceptHookOrigin(args)
-    text.logerror("Raise Exception, exit 1")
-    game_threes.threadExit(1)
-exceptHookOrigin = threading.excepthook
-threading.excepthook = exceptHookOverride
 
-from traceback import print_exc
-from time import sleep
 try:
     __main__()
 except KeyboardInterrupt:

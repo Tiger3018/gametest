@@ -1,4 +1,0 @@
-
-
-def check():
-    pass
